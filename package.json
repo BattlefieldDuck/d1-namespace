@@ -1,7 +1,7 @@
 {
   "name": "d1-kv-store",
   "version": "1.0.0",
-  "description": "A key-value store library for Cloudflare D1",
+  "description": "An empty TypeScript npm library",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
@@ -9,13 +9,7 @@
     "prepublishOnly": "npm run build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [
-    "d1",
-    "cloudflare",
-    "kv-store",
-    "key-value",
-    "database"
-  ],
+  "keywords": [],
   "author": "",
   "license": "ISC",
   "files": [
