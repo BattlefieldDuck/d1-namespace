@@ -1,0 +1,28 @@
+{
+  "name": "d1-kv-store",
+  "version": "1.0.0",
+  "description": "A key-value store library for Cloudflare D1",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "d1",
+    "cloudflare",
+    "kv-store",
+    "key-value",
+    "database"
+  ],
+  "author": "",
+  "license": "ISC",
+  "files": [
+    "dist"
+  ],
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3"
+  }
+}
