@@ -3,28 +3,67 @@ import { D1_SQL, sanitizeTableName } from "./d1-sql";
 import { base64Decode, base64Encode, readStream } from "./utils";
 
 export class D1Namespace<Key extends string = string> implements KVNamespace<Key> {
-    private readonly enc = new TextEncoder();
-    private readonly dec = new TextDecoder();
+    /**
+     * Fully normalized options object.
+     * All user-supplied options are merged with defaults in the constructor,
+     * so internal code never has to handle `undefined` values.
+     */
+    readonly options: Readonly<Required<D1NamespaceOptions>>;
 
-    readonly options: Readonly<D1NamespaceOptions>;
-    private readonly namespace: string;
-    private readonly tableName: string;
-    private tableReady?: Promise<void>;
+    /**
+     * Internal UTF-8 encoders/decoders used for converting between
+     * string values and the underlying D1 BLOB storage format.
+     */
+    readonly #encoder = new TextEncoder();
+    readonly #decoder = new TextDecoder();
+
+    /**
+     * Cached, lazily-prepared SQL statements.
+     * Each statement is prepared once per instance and reused across calls,
+     * avoiding repeated SQL parsing inside D1 and improving performance.
+     */
+    readonly #stmt: {
+        get: D1PreparedStatement,
+        getWithMetadata: D1PreparedStatement,
+        list: D1PreparedStatement,
+        put: D1PreparedStatement,
+        delete: D1PreparedStatement,
+        ensureTable: D1PreparedStatement,
+        pruneExpired: D1PreparedStatement,
+    };
+
+    /**
+     * Promise that resolves once the namespace table exists.
+     * Used to ensure `ensureTable()` is run once and awaited by
+     * concurrent calls without duplicating schema creation.
+     */
+    #tableReady?: Promise<void>;
 
     constructor(
-        private d1: D1Database,
+        private readonly d1: D1Database,
         options?: D1NamespaceOptions
     ) {
-        this.namespace = options?.namespace ?? "";
-        this.tableName = options?.table?.name ? sanitizeTableName(options.table.name) : "kv";
+        const tableName = options?.table?.name ? sanitizeTableName(options.table.name) : "kv";
+        const pruneExpiredKeysOn = options?.pruneExpiredKeysOn ?? ["put", "delete"];
+
         this.options = Object.freeze({
-            namespace: this.namespace,
+            namespace: options?.namespace ?? "",
             table: {
-                name: this.tableName,
+                name: tableName,
                 autoCreate: options?.table?.autoCreate ?? true,
             },
-            pruneExpiredKeysOn: options?.pruneExpiredKeysOn ?? ["put", "delete"] as D1NamespaceOptions["pruneExpiredKeysOn"],
+            pruneExpiredKeysOn,
         });
+
+        this.#stmt = {
+            get: this.d1.prepare(D1_SQL.get(tableName)),
+            getWithMetadata: this.d1.prepare(D1_SQL.getWithMetadata(tableName)),
+            list: this.d1.prepare(D1_SQL.list(tableName)),
+            put: this.d1.prepare(D1_SQL.put(tableName)),
+            delete: this.d1.prepare(D1_SQL.delete(tableName)),
+            ensureTable: this.d1.prepare(D1_SQL.ensureTable(tableName)),
+            pruneExpired: this.d1.prepare(D1_SQL.pruneExpired(tableName)),
+        };
     }
 
     async get<ExpectedValue = unknown>(
@@ -71,9 +110,8 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
         // decode cursor
         const start_after = options?.cursor ? base64Decode(options.cursor) : "";
 
-        const rows = await this.d1
-            .prepare(D1_SQL.list(this.tableName))
-            .bind(this.namespace, lower, upper, start_after, limit + 1)
+        const rows = await this.#stmt.list
+            .bind(this.options.namespace, lower, upper, start_after, limit + 1)
             .all<{ key: string; expires_at: number | null; metadata: ArrayBuffer }>();
 
         const hasMore = rows.results.length > limit;
@@ -83,7 +121,7 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
         const keys = page.map(r => {
             const item: { name: Key; expiration?: number; metadata?: Metadata } = { name: r.key as Key };
             if (typeof r.expires_at === "number") item.expiration = r.expires_at;
-            if (r.metadata) item.metadata = JSON.parse(this.dec.decode(new Uint8Array(r.metadata)));
+            if (r.metadata) item.metadata = JSON.parse(this.#decoder.decode(new Uint8Array(r.metadata)));
             return item;
         });
 
@@ -110,7 +148,7 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
         // 1) Normalize value to Uint8Array
         let bytes: Uint8Array;
         if (typeof value === "string") {
-            bytes = this.enc.encode(value);
+            bytes = this.#encoder.encode(value);
         } else if (value instanceof ArrayBuffer) {
             bytes = new Uint8Array(value);
         } else if (ArrayBuffer.isView(value)) {
@@ -150,14 +188,11 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
                 throw new TypeError("Metadata could not be serialized to JSON.");
             }
 
-            metadata = this.enc.encode(metadataString);
+            metadata = this.#encoder.encode(metadataString);
         }
 
         // 4) UPSERT
-        await this.d1
-            .prepare(D1_SQL.put(this.tableName))
-            .bind(this.namespace, key, bytes, expiration, metadata)
-            .run();
+        await this.#stmt.put.bind(this.options.namespace, key, bytes, expiration, metadata).run();
 
         if (this.options.pruneExpiredKeysOn?.includes("put")) {
             await this.pruneExpired();
@@ -167,10 +202,7 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
     async delete(key: Key): Promise<void> {
         await this.#ensureTable();
 
-        await this.d1
-            .prepare(D1_SQL.delete(this.tableName))
-            .bind(this.namespace, key)
-            .run();
+        await this.#stmt.delete.bind(this.options.namespace, key).run();
 
         if (this.options.pruneExpiredKeysOn?.includes("delete")) {
             await this.pruneExpired();
@@ -197,10 +229,7 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
     async pruneExpired(): Promise<number> {
         await this.#ensureTable();
 
-        const result = await this.d1
-            .prepare(D1_SQL.pruneExpired(this.tableName))
-            .bind(this.namespace)
-            .run();
+        const result = await this.#stmt.pruneExpired.bind(this.options.namespace).run();
 
         return result.meta.changes;
     }
@@ -215,7 +244,7 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
         withMetadata: boolean
     ) {
         // Select SQL depending on whether metadata is needed.
-        const select = this.d1.prepare(withMetadata ? D1_SQL.getWithMetadata(this.tableName) : D1_SQL.get(this.tableName));
+        const select = withMetadata ? this.#stmt.getWithMetadata : this.#stmt.get;
 
         // Multiple keys
         if (Array.isArray(key)) {
@@ -225,7 +254,7 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
             }
 
             // Prepare one SELECT per key, then execute them in a single D1 batch.
-            const stmts = key.map(k => select.bind(this.namespace, k));
+            const stmts = key.map(k => select.bind(this.options.namespace, k));
             const batchResult = await this.d1.batch<{ value: ArrayBuffer, metadata: ArrayBuffer | null }>(stmts);
 
             // Use a Map to preserve key ordering (like Cloudflare KV does).
@@ -243,13 +272,13 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
                 }
 
                 // Decode the stored value
-                const str = this.dec.decode(new Uint8Array(row.value));
+                const str = this.#decoder.decode(new Uint8Array(row.value));
                 const value = type === "json" ? JSON.parse(str) : str;
 
                 // Attach metadata if requested
                 out.set(k, withMetadata ? {
                     value,
-                    metadata: row.metadata ? JSON.parse(this.dec.decode(new Uint8Array(row.metadata))) : null,
+                    metadata: row.metadata ? JSON.parse(this.#decoder.decode(new Uint8Array(row.metadata))) : null,
                 } as KVNamespaceGetWithMetadataResult<ExpectedValue, unknown> : value);
             }
 
@@ -262,7 +291,7 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
         }
 
         // Run a single SELECT
-        const row = await select.bind(this.namespace, key).first<{ value: ArrayBuffer, metadata: ArrayBuffer | null }>();
+        const row = await select.bind(this.options.namespace, key).first<{ value: ArrayBuffer, metadata: ArrayBuffer | null }>();
 
         // Return null result (or null + metadata) if not found
         if (!row) {
@@ -290,14 +319,14 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
             }
 
             // Text or JSON: decode to UTF-8 string, then parse if needed.
-            const val = this.dec.decode(u8);
+            const val = this.#decoder.decode(u8);
             return type === "json" ? JSON.parse(val) : val;
         })();
 
         // Wrap in metadata if requested
         return withMetadata ? {
             value,
-            metadata: row.metadata ? JSON.parse(this.dec.decode(new Uint8Array(row.metadata))) : null,
+            metadata: row.metadata ? JSON.parse(this.#decoder.decode(new Uint8Array(row.metadata))) : null,
             cacheStatus: null
         } as KVNamespaceGetWithMetadataResult<ExpectedValue, unknown> : value;
     }
@@ -306,13 +335,13 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
         if (!this.options.table?.autoCreate) return;
 
         // If schema initialization already started, reuse the same Promise.
-        if (!this.tableReady) {
-            this.tableReady = (async () => {
-                await this.d1.prepare(D1_SQL.ensureTable(this.tableName)).run();
+        if (!this.#tableReady) {
+            this.#tableReady = (async () => {
+                await this.#stmt.ensureTable.run();
             })();
         }
 
-        return this.tableReady;
+        return this.#tableReady;
     }
 }
 

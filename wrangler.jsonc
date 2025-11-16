@@ -4,7 +4,7 @@
  */
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "d1-kv-testbench",
+	"name": "d1-namespace-test",
 	"main": "src/index.ts",
 	"compatibility_date": "2025-11-09",
 	"kv_namespaces": [
@@ -16,7 +16,7 @@
 	"d1_databases": [
 		{
 			"binding": "DB",
-			"database_name": "d1-kv-testbench",
+			"database_name": "d1-namespace-test",
 		},
 	],
 }
