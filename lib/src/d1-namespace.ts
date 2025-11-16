@@ -190,21 +190,25 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
         }
 
         // 4) UPSERT
-        await this.#stmt.put.bind(this.options.namespace, key, bytes, expiration, metadata).run();
+        const statements = [this.#stmt.put.bind(this.options.namespace, key, bytes, expiration, metadata)];
 
         if (this.options.pruneExpiredKeysOn?.includes("put")) {
-            await this.pruneExpired();
+            statements.push(this.#stmt.pruneExpired.bind(this.options.namespace));
         }
+
+        await this.d1.batch(statements);
     }
 
     async delete(key: Key): Promise<void> {
         await this.#ensureTable();
 
-        await this.#stmt.delete.bind(this.options.namespace, key).run();
+        const statements = [this.#stmt.delete.bind(this.options.namespace, key)];
 
         if (this.options.pruneExpiredKeysOn?.includes("delete")) {
-            await this.pruneExpired();
+            statements.push(this.#stmt.pruneExpired.bind(this.options.namespace));
         }
+
+        await this.d1.batch(statements);
     }
 
     /**
