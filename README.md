@@ -153,6 +153,77 @@ await kv.put("key", "value for the key", { expirationTtl: 30 });
 // ✅ Works — D1 Namespace supports sub-60-second expirations.
 ```
 
+## D1 Namespace Options
+
+Configure the behavior of a `D1Namespace` instance.
+
+```ts
+export interface D1NamespaceOptions {
+  namespace?: string;
+  ensureSchema?: boolean;
+  pruneExpiredKeysOn?: (
+    | "put"
+    | "delete"
+    | "get"
+    | "getWithMetadata"
+    | "list"
+  )[];
+}
+```
+
+### `namespace?: string`
+
+Logical namespace that groups key–value pairs.
+
+* Keys are scoped within this namespace.
+* Two identical keys in different namespaces do not collide.
+* Defaults to an empty string (`""`).
+
+**Example**
+
+```ts
+new D1Namespace(env.DB, { namespace: "users" });
+```
+
+---
+
+### `ensureSchema?: boolean`
+
+Automatically creates the required `kv` table and indexes if they do not exist.
+
+* Runs only once on the first operation.
+* Defaults to `true`.
+
+**Example**
+
+```ts
+new D1Namespace(env.DB, { ensureSchema: false });
+```
+
+---
+
+### `pruneExpiredKeysOn?: (...)[]`
+
+Controls when expired keys are automatically removed.
+
+* Defaults to `["put", "delete"]`.
+
+Supported triggers:
+
+| Operation           | Meaning                                         |
+| ------------------- | ----------------------------------------------- |
+| `"put"`             | After inserting or updating a key               |
+| `"delete"`          | After deleting a key                            |
+| `"get"`             | After reading a key *(not recommended)*         |
+| `"getWithMetadata"` | After reading with metadata *(not recommended)* |
+| `"list"`            | After listing keys *(use with caution)*         |
+
+**Example**
+
+```ts
+new D1Namespace(env.DB, { pruneExpiredKeysOn: ["put", "delete"] });
+```
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit pull requests or open issues.
