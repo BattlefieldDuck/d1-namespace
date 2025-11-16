@@ -17,7 +17,7 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
         this.namespace = options?.namespace ?? "";
         this.options = Object.freeze({
             namespace: this.namespace,
-            ensureSchema: options?.ensureSchema ?? false,
+            ensureSchema: options?.ensureSchema ?? true,
             pruneExpiredKeysOn: options?.pruneExpiredKeysOn ?? ["put", "delete"] as D1NamespaceOptions["pruneExpiredKeysOn"],
         });
     }

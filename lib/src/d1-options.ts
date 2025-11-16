@@ -12,7 +12,7 @@ export interface D1NamespaceOptions {
      * When enabled, the first operation will create the `kv` table and indexes
      * if they are missing in the bound D1 database.
      *
-     * Defaults to `false`.
+     * Defaults to `true`.
      */
     ensureSchema?: boolean;
 

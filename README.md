@@ -21,25 +21,25 @@ console.log(`Fetched value from D1 KV: ${value}`); // should log "my-value"
 ## Features
 
 * **Higher read & write limits**
-  
+
   Built on Cloudflare D1’s generous quotas:
   5 million rows-read per day and 100,000 rows-written per day on the Free plan, and tens of billions per month on the Paid plan. Ideal for heavy KV-like workloads.
 
 * **Cost-efficient compared to Cloudflare KV**
-  
+
   Your workload will typically cost **0–95% less** depending on volume, especially for read-heavy or moderate write workloads.
 
 * **Cloudflare KV-compatible API**
-  
+
   Supports the familiar KV methods (`get`, `getWithMetadata`, `put`, `delete`, `list`) with optional metadata and TTLs, behaving similarly to Cloudflare KV.
 
   ```diff
   - const kv = env.KV_NAMESPACE;
   + const kv = new D1Namespace(env.DB);
   ```
-  
+
 * **One D1 database, unlimited KV namespaces**
-  
+
   A single D1 database can host unlimited logical KV namespaces by using `(namespace, key)` as the primary key. No need to create or manage multiple KV namespaces.
 
   ```ts
@@ -48,7 +48,7 @@ console.log(`Fetched value from D1 KV: ${value}`); // should log "my-value"
   ```
 
 * **Backed by SQL when you need it**
-  
+
   Because it runs on SQLite (via D1), you can inspect, query, and debug your data with full SQL power — including SELECT, DELETE, migration scripts, and dev tooling.
 
   ```ts
@@ -65,7 +65,7 @@ To install d1-namespace, run the following command in your project directory:
 npm install d1-namespace
 ```
 
-Bind your Worker to your D1 database on `wrangler.jsonc`. 
+Bind your Worker to your D1 database on `wrangler.jsonc`.
 
 ```jsonc
 {
@@ -91,9 +91,8 @@ import { D1Namespace } from "d1-namespace";
 
 export default {
 	async fetch(request, env, ctx) {
-		// Create D1Namespace instance, ensuring the kv schema is created
-		// After the first time, you can remove { ensureSchema: true } for better performance
-		const kv = new D1Namespace(env.DB, { ensureSchema: true });
+		// Create D1Namespace instance
+		const kv = new D1Namespace(env.DB);
 
 		// Write single key
 		await kv.put("first-key", "This is the value for the key");
@@ -139,18 +138,18 @@ export default {
 ### Expiring keys
 
 Cloudflare KV does not allow expiration times shorter than 60 seconds.
-With D1 Namespace, you can set TTLs with just a few seconds. 
+With D1 Namespace, you can set TTLs with just a few seconds.
 This provides much finer control for short-lived data, caching, sessions, and temporary state.
 
 ```ts
 // Cloudflare KV
 const kv = env.KV_NAMESPACE;
-await kv.put("key", "value for the key", { expirationTtl: 30 });  
+await kv.put("key", "value for the key", { expirationTtl: 30 });
 // ❌ Fails — KV does not allow TTL values below 60 seconds.
 
 // D1 Namespace
 const kv = new D1Namespace(env.DB);
-await kv.put("key", "value for the key", { expirationTtl: 30 });  
+await kv.put("key", "value for the key", { expirationTtl: 30 });
 // ✅ Works — D1 Namespace supports sub-60-second expirations.
 ```
 
