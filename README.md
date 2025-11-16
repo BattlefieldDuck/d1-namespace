@@ -1,7 +1,12 @@
 # D1 Namespace
 
 ![Cloudflare D1](https://img.shields.io/badge/Cloudflare_D1-F89D33?style=flat-square&logo=cloudflare&logoColor=white)
+![NPM Type Definitions](https://img.shields.io/npm/types/d1-namespace)
 [![coverage](https://img.shields.io/endpoint?url=https://battlefieldduck.github.io/d1-namespace/badge.json)](https://battlefieldduck.github.io/d1-namespace/coverage/)
+[![NPM Version](https://img.shields.io/npm/v/d1-namespace)](https://www.npmjs.com/package/d1-namespace)
+![NPM Downloads](https://img.shields.io/npm/dw/d1-namespace)
+![NPM Downloads](https://img.shields.io/npm/d18m/d1-namespace)
+![NPM License](https://img.shields.io/npm/l/d1-namespace)
 
 Cloudflare KV-compatible key-value storage implemented on top of Cloudflare D1.
 
