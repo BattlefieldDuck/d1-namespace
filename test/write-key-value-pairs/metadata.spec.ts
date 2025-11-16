@@ -25,7 +25,7 @@ describe("[KV Parity] Write key-value pairs: Metadata", async () => {
     ]
 
     for (const { metadata } of cases) {
-        test(`put("${key}", string, { metadata: ${JSON.stringify(metadata())} })`, async () => {
+        test(`put("${key}", "${value}", { metadata: ${JSON.stringify(metadata())} })`, async () => {
             await Promise.all(kvs.map(kv => kv.put(key, value, { metadata: metadata() })));
             const [kvResult, d1Result] = await Promise.all(kvs.map(kv => kv.get(key)));
             await expectEqual([kvResult, d1Result]);
@@ -33,12 +33,13 @@ describe("[KV Parity] Write key-value pairs: Metadata", async () => {
     }
 
     const invalidCases = [
-        { metadata: () => Symbol("id") },              // not JSON-serializable
+        { metadata: () => Symbol("id") },              // not JSON-serializable - [mf:error] SyntaxError: Unexpected end of JSON input
         { metadata: () => BigInt(1234567890123456) },  // not JSON-serializable
     ];
 
     for (const { metadata } of invalidCases) {
-        test(`put("${key}", string, { metadata: ${String(metadata())} })`, async () => {
+        test(`put("${key}", "${value}", { metadata: ${String(metadata())} })`, async () => {
+            console.info = () => {};
             for (const kv of kvs) {
                 await expect(kv.put(key, value, { metadata: metadata() })).rejects.toThrow();
             }
