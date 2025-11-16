@@ -1,0 +1,22 @@
+/**
+ * For more details on how to configure Wrangler, refer to:
+ * https://developers.cloudflare.com/workers/wrangler/configuration/
+ */
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "d1-kv-testbench",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-11-09",
+	"kv_namespaces": [
+		{
+			"binding": "KV_NAMESPACE",
+			"id": "00000000000000000000000000000000",
+		},
+	],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "d1-kv-testbench",
+		},
+	],
+}

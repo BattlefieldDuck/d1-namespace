@@ -1,36 +1,43 @@
 {
-  "compilerOptions": {
-    /* Language and Environment */
-    "target": "ES2020",
-    "lib": ["ES2020"],
+	"compilerOptions": {
+		/* Visit https://aka.ms/tsconfig.json to read more about this file */
 
-    /* Modules */
-    "module": "commonjs",
-    "rootDir": "./src",
-    "moduleResolution": "node",
-    "resolveJsonModule": true,
+    /* Set the JavaScript language version for emitted JavaScript and include compatible library declarations. */
+		"target": "esnext",
+    /* Specify a set of bundled library declaration files that describe the target runtime environment. */
+		"lib": ["esnext"],
+    /* Specify what JSX code is generated. */
+		"jsx": "react-jsx",
 
-    /* Emit */
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "outDir": "./dist",
+    /* Specify what module code is generated. */
+		"module": "esnext",
+    /* Specify how TypeScript looks up a file from a given module specifier. */
+		"moduleResolution": "bundler",
+    /* Enable importing .json files */
+		"resolveJsonModule": true,
 
-    /* Interop Constraints */
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
+    /* Allow JavaScript files to be a part of your program. Use the `checkJS` option to get errors from these files. */
+		"allowJs": true,
+    /* Enable error reporting in type-checked JavaScript files. */
+		"checkJs": false,
 
-    /* Type Checking */
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
-    "noUncheckedIndexedAccess": true,
+    /* Disable emitting files from a compilation. */
+		"noEmit": true,
 
-    /* Completeness */
-    "skipLibCheck": true
-  },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+    /* Ensure that each file can be safely transpiled without relying on other imports. */
+		"isolatedModules": true,
+    /* Allow 'import x from y' when a module doesn't have a default export. */
+		"allowSyntheticDefaultImports": true,
+    /* Ensure that casing is correct in imports. */
+		"forceConsistentCasingInFileNames": true,
+
+    /* Enable all strict type-checking options. */
+		"strict": true,
+
+    /* Skip type checking all .d.ts files. */
+		"skipLibCheck": true,
+		"types": [
+			"./worker-configuration.d.ts"
+		]
+	}
 }

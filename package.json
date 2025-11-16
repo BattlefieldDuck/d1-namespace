@@ -1,22 +1,20 @@
 {
-  "name": "d1-kv-store",
-  "version": "1.0.0",
-  "description": "An empty TypeScript npm library",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "scripts": {
-    "build": "tsc",
-    "prepublishOnly": "npm run build",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "files": [
-    "dist"
-  ],
-  "devDependencies": {
-    "@types/node": "^24.10.1",
-    "typescript": "^5.9.3"
-  }
+	"name": "d1-namespace-test",
+	"version": "0.0.0",
+	"private": true,
+	"scripts": {
+		"deploy": "wrangler deploy",
+		"dev": "wrangler dev --test-scheduled",
+		"start": "wrangler dev --test-scheduled",
+		"cf-typegen": "wrangler types",
+		"test": "vitest",
+		"test:coverage": "vitest --coverage"
+	},
+	"devDependencies": {
+		"@cloudflare/vitest-pool-workers": "^0.10.7",
+		"@vitest/coverage-istanbul": "^3.2.4",
+		"typescript": "^5.9.3",
+		"vitest": "^3.2.4",
+		"wrangler": "^4.47.0"
+	}
 }
