@@ -157,20 +157,6 @@ await kv.put("key", "value for the key", { expirationTtl: 30 });
 
 Configure the behavior of a `D1Namespace` instance.
 
-```ts
-export interface D1NamespaceOptions {
-  namespace?: string;
-  ensureSchema?: boolean;
-  pruneExpiredKeysOn?: (
-    | "put"
-    | "delete"
-    | "get"
-    | "getWithMetadata"
-    | "list"
-  )[];
-}
-```
-
 ### `namespace?: string`
 
 Logical namespace that groups key–value pairs.
@@ -197,7 +183,7 @@ Automatically creates the required `kv` table and indexes if they do not exist.
 **Example**
 
 ```ts
-new D1Namespace(env.DB, { ensureSchema: false });
+new D1Namespace(env.DB, { ensureSchema: true });
 ```
 
 ---
