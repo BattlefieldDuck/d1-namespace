@@ -90,48 +90,48 @@ The D1 Namespace behaves almost identically to the KV [Workers Binding API](http
 import { D1Namespace } from "d1-namespace";
 
 export default {
-	async fetch(request, env, ctx) {
-		// Create D1Namespace instance
-		const kv = new D1Namespace(env.DB);
+    async fetch(request, env, ctx) {
+        // Create D1Namespace instance
+        const kv = new D1Namespace(env.DB);
 
-		// Write single key
-		await kv.put("first-key", "This is the value for the key");
+        // Write single key
+        await kv.put("first-key", "This is the value for the key");
 
-		// Write single key with metadata and expiration TTL of 15 seconds
-		await kv.put("second-key", "This is the value for the second key", {
-			metadata: { someMetadataKey: "someMetadataValue" },
-			expirationTtl: 15,
-		});
+        // Write single key with metadata and expiration TTL of 15 seconds
+        await kv.put("second-key", "This is the value for the second key", {
+            metadata: { someMetadataKey: "someMetadataValue" },
+            expirationTtl: 15,
+        });
 
-		// Write another single key
-		await kv.put("third-key", "This is the value for the third key");
+        // Write another single key
+        await kv.put("third-key", "This is the value for the third key");
 
-		// Delete a key :P
-		await kv.delete("third-key");
+        // Delete a key :P
+        await kv.delete("third-key");
 
-		// Read single key, returns value or null
-		const value = await kv.get("first-key");
+        // Read single key, returns value or null
+        const value = await kv.get("first-key");
 
-		// Read multiple keys, returns Map of values
-		const values = await kv.get(["first-key", "second-key", "third-key"]);
+        // Read multiple keys, returns Map of values
+        const values = await kv.get(["first-key", "second-key", "third-key"]);
 
-		// Read single key with metadata, returns value or null
-		const valueWithMetadata = await kv.getWithMetadata("first-key");
+        // Read single key with metadata, returns value or null
+        const valueWithMetadata = await kv.getWithMetadata("first-key");
 
-		// Read multiple keys with metadata, returns Map of values
-		const valuesWithMetadata = await kv.getWithMetadata(["first-key", "second-key", "third-key"]);
+        // Read multiple keys with metadata, returns Map of values
+        const valuesWithMetadata = await kv.getWithMetadata(["first-key", "second-key", "third-key"]);
 
-		// List all keys
-		const list = await kv.list();
+        // List all keys
+        const list = await kv.list();
 
-		return Response.json({
-			value: value,
-			values: Object.fromEntries(values),
-			valueWithMetadata: valueWithMetadata,
-			valuesWithMetadata: Object.fromEntries(valuesWithMetadata),
-			list: list,
-		});
-	},
+        return Response.json({
+            value: value,
+            values: Object.fromEntries(values),
+            valueWithMetadata: valueWithMetadata,
+            valuesWithMetadata: Object.fromEntries(valuesWithMetadata),
+            list: list,
+        });
+    },
 } satisfies ExportedHandler<Env>;
 ```
 
