@@ -4,7 +4,7 @@
 -- Core table
 CREATE TABLE IF NOT EXISTS kv (
   namespace   TEXT    NOT NULL,
-  key         TEXT    NOT NULL,
+  key         TEXT    NOT NULL COLLATE BINARY,
   value       BLOB    NOT NULL,                 -- raw bytes
   ttl_seconds INTEGER,                          -- NULL => never expires
   created_at  INTEGER NOT NULL DEFAULT (unixepoch()),
@@ -15,11 +15,7 @@ CREATE TABLE IF NOT EXISTS kv (
   ) STORED,
   metadata    BLOB,                             -- JSON (stored as text or bytes)
   PRIMARY KEY (namespace, key)
-);
-
--- Fast ordered scans by (namespace, key) in raw UTF-8 byte order
-CREATE INDEX IF NOT EXISTS kv_ns_key_bin_idx
-  ON kv(namespace, key COLLATE BINARY);
+) WITHOUT ROWID;
 
 -- Pruning / expiry scans
 CREATE INDEX IF NOT EXISTS kv_ns_exp_idx

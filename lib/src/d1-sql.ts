@@ -39,7 +39,7 @@ export const D1_SQL = {
     ensureSchema: /* sql */ `
         CREATE TABLE IF NOT EXISTS kv (
             namespace   TEXT    NOT NULL,
-            key         TEXT    NOT NULL,
+            key         TEXT    NOT NULL COLLATE BINARY,
             value       BLOB    NOT NULL,
             ttl_seconds INTEGER,
             created_at  INTEGER NOT NULL DEFAULT (unixepoch()),
@@ -50,10 +50,7 @@ export const D1_SQL = {
             ) STORED,
             metadata    BLOB,
             PRIMARY KEY (namespace, key)
-        );
-
-        CREATE INDEX IF NOT EXISTS kv_ns_key_bin_idx
-            ON kv(namespace, key COLLATE BINARY);
+        ) WITHOUT ROWID;
 
         CREATE INDEX IF NOT EXISTS kv_ns_exp_idx
             ON kv(namespace, expires_at)
