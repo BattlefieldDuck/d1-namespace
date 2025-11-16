@@ -41,6 +41,11 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v5
 
+      - name: Copy README.md and LICENSE
+        run: |
+          cp README.md lib/
+          cp LICENSE lib/
+
       - name: Set up Node
         uses: actions/setup-node@v6
         with:
