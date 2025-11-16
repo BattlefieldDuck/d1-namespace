@@ -1,6 +1,5 @@
 import { D1NamespaceOptions } from "./d1-options";
 import { D1_SQL } from "./d1-sql";
-import { KVLimits } from "./kv-limits";
 import { base64Decode, base64Encode, readStream } from "./utils";
 
 export class D1Namespace<Key extends string = string> implements KVNamespace<Key> {
@@ -62,14 +61,7 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
         const prefix = options?.prefix ?? "";
         const lower = prefix;                      // inclusive
         const upper = prefix + "\u{10FFFF}";       // exclusive
-        const rawLimit = options?.limit;
-        const limit = Math.max(
-            1,
-            Math.min(
-                Number(rawLimit) || KVLimits.MAX_LIST_KEYS,
-                KVLimits.MAX_LIST_KEYS
-            )
-        );
+        const limit = Math.max(1, Number(options?.limit ?? 1000));
 
         // decode cursor
         const start_after = options?.cursor ? base64Decode(options.cursor) : "";
