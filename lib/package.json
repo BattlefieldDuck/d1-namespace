@@ -1,6 +1,6 @@
 {
     "name": "d1-namespace",
-    "version": "0.0.2",
+    "version": "0.0.3",
     "description": "Cloudflare KV-compatible key-value storage implemented on top of Cloudflare D1.",
     "repository": {
         "type": "git",
