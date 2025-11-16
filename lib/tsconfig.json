@@ -6,9 +6,9 @@
     "types": ["@cloudflare/workers-types"],
 
     /* Modules */
-    "module": "commonjs",
+    "module": "ESNext",
     "rootDir": "./src",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
 
     /* Emit */

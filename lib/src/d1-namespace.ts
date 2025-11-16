@@ -4,9 +4,7 @@ import { base64Decode, base64Encode, readStream } from "./utils";
 
 export class D1Namespace<Key extends string = string> implements KVNamespace<Key> {
     /**
-     * Fully normalized options object.
-     * All user-supplied options are merged with defaults in the constructor,
-     * so internal code never has to handle `undefined` values.
+     * The final, normalized configuration used by this instance.
      */
     readonly options: Readonly<Required<D1NamespaceOptions>>;
 

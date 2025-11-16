@@ -2,6 +2,7 @@
     "name": "d1-namespace",
     "version": "1.0.0",
     "description": "Cloudflare KV-compatible key-value storage implemented on top of Cloudflare D1.",
+    "type": "module",
     "repository": {
         "type": "git",
         "url": "git+https://github.com/BattlefieldDuck/d1-namespace.git"
