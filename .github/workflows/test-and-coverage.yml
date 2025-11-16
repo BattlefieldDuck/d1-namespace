@@ -1,0 +1,73 @@
+name: Test & Coverage Badge
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests with coverage
+        env:
+          CI: true
+        run: npm run test:coverage
+
+      - name: Prepare Pages artifact (badge + coverage)
+        run: |
+          # Create a root folder for GitHub Pages content
+          rm -rf pages
+          mkdir -p pages
+
+          # Move coverage HTML into /coverage under the pages root
+          if [ -d coverage ]; then
+            mv coverage pages/coverage
+          fi
+
+          # Extract line coverage percentage from coverage-summary.json
+          COVERAGE=$(jq '.total.lines.pct' pages/coverage/coverage-summary.json)
+
+          # Build Shields.io endpoint JSON at /badge.json
+          cat <<EOF > pages/badge.json
+          {
+            "schemaVersion": 1,
+            "label": "coverage",
+            "message": "${COVERAGE}%",
+            "color": "green"
+          }
+          EOF
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: pages
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy badge + coverage to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
