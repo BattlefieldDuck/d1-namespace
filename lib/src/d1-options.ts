@@ -8,13 +8,45 @@ export interface D1NamespaceOptions {
     namespace?: string;
 
     /**
-     * Automatically ensures that the required KV table exists.
-     * When enabled, the first operation will create the `kv` table and indexes
-     * if they are missing in the bound D1 database.
+     * Configuration for the underlying D1 table used to store KV entries.
      *
-     * Defaults to `true`.
+     * By default, all data is stored in a table named "kv". You can override
+     * the table name to isolate multiple logical stores inside the same D1
+     * database (e.g. "auth_kv", "cache_kv", "sessions_kv").
+     *
+     * All custom tables must follow the same schema as the default table.
      */
-    ensureSchema?: boolean;
+    table?: {
+        /**
+         * Name of the D1 table where key–value records are stored.
+         *
+         * Defaults to "kv".
+         *
+         * Notes:
+         * - Useful when sharing one D1 database across multiple logical stores.
+         * - Each table is still internally partitioned by `namespace`, so both
+         *   features can be combined to isolate data as needed.
+         */
+        name?: string;
+
+        /**
+         * Whether the table (and its supporting indexes) should be created
+         * automatically if they do not already exist.
+         *
+         * When enabled, the first operation runs a lightweight schema check
+         * and executes `CREATE TABLE IF NOT EXISTS` and index creation
+         * statements for the configured table name.
+         *
+         * Defaults to true.
+         *
+         * Notes:
+         * - Recommended for development and serverless deployments where the
+         *   database may start empty.
+         * - Disable this if you handle schema creation externally (e.g. via
+         *   migrations or Drizzle).
+         */
+        autoCreate?: boolean;
+    };
 
     /**
      * Automatically prune expired keys after specific operations.

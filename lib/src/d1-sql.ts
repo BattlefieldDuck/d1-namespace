@@ -1,43 +1,57 @@
+export function sanitizeTableName(name: string): string {
+    if (!/^[A-Za-z0-9_]+$/.test(name)) {
+        throw new Error(`Invalid table name: ${name}`);
+    }
+    return name;
+}
+
 export const D1_SQL = {
-    get: /* sql */ `
+    get: (table: string) => /* sql */ `
         SELECT value
-        FROM kv
+        FROM ${table}
         WHERE namespace = ?
-        AND key = ?
-        AND (expires_at IS NULL OR expires_at > unixepoch())
+          AND key = ?
+          AND (expires_at IS NULL OR expires_at > unixepoch())
     `,
-    getWithMetadata: /* sql */ `
+
+    getWithMetadata: (table: string) => /* sql */ `
         SELECT value, metadata
-        FROM kv
+        FROM ${table}
         WHERE namespace = ?
-            AND key = ?
-            AND (expires_at IS NULL OR expires_at > unixepoch())
+          AND key = ?
+          AND (expires_at IS NULL OR expires_at > unixepoch())
     `,
-    list: /* sql */ `
+
+    list: (table: string) => /* sql */ `
         SELECT key, expires_at, metadata
-        FROM kv
+        FROM ${table}
         WHERE namespace = ?
-            AND (expires_at IS NULL OR expires_at > unixepoch())
-            AND key >= ?
-            AND key < ?
-            AND key > ?
+          AND (expires_at IS NULL OR expires_at > unixepoch())
+          AND key >= ?
+          AND key < ?
+          AND key > ?
         ORDER BY key COLLATE BINARY
         LIMIT ?
     `,
-    put: /* sql */ `
-        INSERT INTO kv (namespace, key, value, ttl_seconds, created_at, metadata)
-            VALUES (?, ?, ?, ?, unixepoch(), ?)
+
+    put: (table: string) => /* sql */ `
+        INSERT INTO ${table} (namespace, key, value, ttl_seconds, created_at, metadata)
+        VALUES (?, ?, ?, ?, unixepoch(), ?)
         ON CONFLICT(namespace, key) DO UPDATE SET
             value       = excluded.value,
             ttl_seconds = excluded.ttl_seconds,
             created_at  = unixepoch(),
             metadata    = excluded.metadata
     `,
-    delete: /* sql */ `
-        DELETE FROM kv WHERE namespace = ? AND key = ?
+
+    delete: (table: string) => /* sql */ `
+        DELETE FROM ${table}
+        WHERE namespace = ?
+          AND key = ?
     `,
-    ensureSchema: /* sql */ `
-        CREATE TABLE IF NOT EXISTS kv (
+
+    ensureTable: (table: string) => /* sql */ `
+        CREATE TABLE IF NOT EXISTS ${table} (
             namespace   TEXT    NOT NULL,
             key         TEXT    NOT NULL COLLATE BINARY,
             value       BLOB    NOT NULL,
@@ -52,14 +66,15 @@ export const D1_SQL = {
             PRIMARY KEY (namespace, key)
         ) WITHOUT ROWID;
 
-        CREATE INDEX IF NOT EXISTS kv_ns_exp_idx
-            ON kv(namespace, expires_at)
+        CREATE INDEX IF NOT EXISTS ${table}_ns_exp_idx
+            ON ${table}(namespace, expires_at)
             WHERE expires_at IS NOT NULL;
     `,
-    pruneExpired: /* sql */ `
-        DELETE FROM kv
-            WHERE namespace = ?
-                AND expires_at IS NOT NULL
-                AND expires_at <= unixepoch()
+
+    pruneExpired: (table: string) => /* sql */ `
+        DELETE FROM ${table}
+        WHERE namespace = ?
+          AND expires_at IS NOT NULL
+          AND expires_at <= unixepoch()
     `,
 } as const;

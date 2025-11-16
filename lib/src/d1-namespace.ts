@@ -1,5 +1,5 @@
 import { D1NamespaceOptions } from "./d1-options";
-import { D1_SQL } from "./d1-sql";
+import { D1_SQL, sanitizeTableName } from "./d1-sql";
 import { base64Decode, base64Encode, readStream } from "./utils";
 
 export class D1Namespace<Key extends string = string> implements KVNamespace<Key> {
@@ -8,16 +8,21 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
 
     readonly options: Readonly<D1NamespaceOptions>;
     private readonly namespace: string;
-    private schemaReady?: Promise<void>;
+    private readonly tableName: string;
+    private tableReady?: Promise<void>;
 
     constructor(
         private d1: D1Database,
         options?: D1NamespaceOptions
     ) {
         this.namespace = options?.namespace ?? "";
+        this.tableName = options?.table?.name ? sanitizeTableName(options.table.name) : "kv";
         this.options = Object.freeze({
             namespace: this.namespace,
-            ensureSchema: options?.ensureSchema ?? true,
+            table: {
+                name: this.tableName,
+                autoCreate: options?.table?.autoCreate ?? true,
+            },
             pruneExpiredKeysOn: options?.pruneExpiredKeysOn ?? ["put", "delete"] as D1NamespaceOptions["pruneExpiredKeysOn"],
         });
     }
@@ -26,7 +31,7 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
         key: Key | Array<Key>,
         options?: any
     ): Promise<any> {
-        await this.#ensureSchema();
+        await this.#ensureTable();
 
         const type = (typeof options === "string" ? options : options?.type) ?? "text";
         const value = await this.#getImpl<ExpectedValue>(key, type, false);
@@ -42,7 +47,7 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
         key: Key | Array<Key>,
         options?: any
     ): Promise<any> {
-        await this.#ensureSchema();
+        await this.#ensureTable();
 
         const type = (typeof options === "string" ? options : options?.type) ?? "text";
         const value = await this.#getImpl<ExpectedValue>(key, type, true);
@@ -67,7 +72,7 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
         const start_after = options?.cursor ? base64Decode(options.cursor) : "";
 
         const rows = await this.d1
-            .prepare(D1_SQL.list)
+            .prepare(D1_SQL.list(this.tableName))
             .bind(this.namespace, lower, upper, start_after, limit + 1)
             .all<{ key: string; expires_at: number | null; metadata: ArrayBuffer }>();
 
@@ -100,7 +105,7 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
         value: any,
         options?: KVNamespacePutOptions
     ): Promise<void> {
-        await this.#ensureSchema();
+        await this.#ensureTable();
 
         // 1) Normalize value to Uint8Array
         let bytes: Uint8Array;
@@ -150,7 +155,7 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
 
         // 4) UPSERT
         await this.d1
-            .prepare(D1_SQL.put)
+            .prepare(D1_SQL.put(this.tableName))
             .bind(this.namespace, key, bytes, expiration, metadata)
             .run();
 
@@ -160,10 +165,10 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
     }
 
     async delete(key: Key): Promise<void> {
-        await this.#ensureSchema();
+        await this.#ensureTable();
 
         await this.d1
-            .prepare(D1_SQL.delete)
+            .prepare(D1_SQL.delete(this.tableName))
             .bind(this.namespace, key)
             .run();
 
@@ -190,10 +195,10 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
      * @returns The number of expired rows deleted.
      */
     async pruneExpired(): Promise<number> {
-        await this.#ensureSchema();
+        await this.#ensureTable();
 
         const result = await this.d1
-            .prepare(D1_SQL.pruneExpired)
+            .prepare(D1_SQL.pruneExpired(this.tableName))
             .bind(this.namespace)
             .run();
 
@@ -210,7 +215,7 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
         withMetadata: boolean
     ) {
         // Select SQL depending on whether metadata is needed.
-        const select = this.d1.prepare(withMetadata ? D1_SQL.getWithMetadata : D1_SQL.get);
+        const select = this.d1.prepare(withMetadata ? D1_SQL.getWithMetadata(this.tableName) : D1_SQL.get(this.tableName));
 
         // Multiple keys
         if (Array.isArray(key)) {
@@ -297,17 +302,17 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
         } as KVNamespaceGetWithMetadataResult<ExpectedValue, unknown> : value;
     }
 
-    async #ensureSchema() {
-        if (!this.options.ensureSchema) return;
+    async #ensureTable() {
+        if (!this.options.table?.autoCreate) return;
 
         // If schema initialization already started, reuse the same Promise.
-        if (!this.schemaReady) {
-            this.schemaReady = (async () => {
-                await this.d1.prepare(D1_SQL.ensureSchema).run();
+        if (!this.tableReady) {
+            this.tableReady = (async () => {
+                await this.d1.prepare(D1_SQL.ensureTable(this.tableName)).run();
             })();
         }
 
-        return this.schemaReady;
+        return this.tableReady;
     }
 }
 
