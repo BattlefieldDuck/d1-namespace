@@ -10,17 +10,11 @@
     },
     "keywords": [
         "cloudflare",
-        "d1",
+        "cloudflare-workers",
         "cloudflare-d1",
-        "kv",
         "cloudflare-kv",
         "kv-namespace",
-        "key-value",
-        "storage",
-        "database",
-        "workers",
-        "cloudflare-workers",
-        "serverless"
+        "d1-namespace"
     ],
     "license": "MIT",
     "files": [
