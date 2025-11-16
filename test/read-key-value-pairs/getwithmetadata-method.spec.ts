@@ -5,7 +5,7 @@ import { expectEqual } from "../utils";
 import { singleKeyCases, multipleKeysCases } from "./get-method-cases";
 
 describe("[KV Parity] Read key-value pairs: getWithMetadata() method", async () => {
-    const kvs = [
+    const stores = [
         env.KV_NAMESPACE,
         new D1Namespace(env.DB)
     ];
@@ -29,9 +29,9 @@ describe("[KV Parity] Read key-value pairs: getWithMetadata() method", async () 
         for (const metadata of metadatas) {
             test(`getWithMetadata("${key}", "${type}") with metadata: ${JSON.stringify(metadata)}`, async () => {
                 if (value !== null) {
-                    await Promise.all(kvs.map(kv => kv.put(key, value(), { metadata })));
+                    await Promise.all(stores.map(kv => kv.put(key, value(), { metadata })));
                 }
-                const [kvResult, d1Result] = await Promise.all(kvs.map(kv => kv.getWithMetadata(key, type as any)));
+                const [kvResult, d1Result] = await Promise.all(stores.map(kv => kv.getWithMetadata(key, type as any)));
                 await expectEqual([kvResult, d1Result]);
             });
         }
@@ -41,8 +41,8 @@ describe("[KV Parity] Read key-value pairs: getWithMetadata() method", async () 
         for (const metadata of metadatas) {
             test(`getWithMetadata(${JSON.stringify(keys)}, "${type}") with metadata: ${JSON.stringify(metadata)}`, async () => {
                 const testData = putKeys.map((k, i) => ({ key: k, value: value(i) }));
-                await Promise.all(testData.flatMap(({ key, value }) => kvs.map(kv => kv.put(key, value, { metadata }))));
-                const [kvResult, d1Result] = await Promise.all(kvs.map(kv => kv.getWithMetadata(keys, type as any)));
+                await Promise.all(testData.flatMap(({ key, value }) => stores.map(kv => kv.put(key, value, { metadata }))));
+                const [kvResult, d1Result] = await Promise.all(stores.map(kv => kv.getWithMetadata(keys, type as any)));
                 await expectEqual([kvResult, d1Result]);
             });
         }

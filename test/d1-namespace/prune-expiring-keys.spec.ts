@@ -6,7 +6,7 @@ describe("[D1] Prune key-value pairs: pruneExpired() method", async () => {
     test("pruneExpired() removes only expired keys", async () => {
         // Create a KV namespace (defaults to namespace = "")
         // Using a blank namespace avoids cross-test interference.
-        const kv = new D1Namespace(env.DB, { ensureSchema: false });
+        const kv = new D1Namespace(env.DB);
 
         // Insert two keys:
         // - "alive"   -> expires in ~5 seconds

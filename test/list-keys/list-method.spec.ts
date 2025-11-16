@@ -19,14 +19,14 @@ const cases = [
     options?: KVNamespaceListOptions;
 }[];
 
-const init = async (kvs: KVNamespace[], n: number, metadata: boolean) => {
+const init = async (stores: KVNamespace[], n: number, metadata: boolean) => {
     const promises: Promise<unknown>[] = [];
 
     for (let i = 0; i < n; i++) {
         const key = `KEY_${i}`;
         const options = metadata ? { metadata: { key: `METADATA_${i}` } } : {};
 
-        for (const kv of kvs) {
+        for (const kv of stores) {
             promises.push(kv.put(key, "", options));
         }
     }
@@ -35,16 +35,16 @@ const init = async (kvs: KVNamespace[], n: number, metadata: boolean) => {
 };
 
 describe("[KV Parity] List keys: list() method", async () => {
-    const kvs = [
+    const stores = [
         env.KV_NAMESPACE,
         new D1Namespace(env.DB),
     ];
 
     for (const { n, metdata, options } of cases) {
         test(`list(${options ? JSON.stringify(options) : ""})`, async () => {
-            await init(kvs, n, metdata);
+            await init(stores, n, metdata);
 
-            let [kvResult, d1Result] = await Promise.all(kvs.map((kv) => kv.list(options)));
+            let [kvResult, d1Result] = await Promise.all(stores.map((kv) => kv.list(options)));
 
             while (true) {
                 // 1. list_complete must always match
@@ -66,7 +66,7 @@ describe("[KV Parity] List keys: list() method", async () => {
 
                 // 5. Fetch next page with that cursor
                 const [nextKvResult, nextD1Result] = await Promise.all(
-                    kvs.map((kv) => kv.list({ ...options, cursor })),
+                    stores.map((kv) => kv.list({ ...options, cursor })),
                 );
 
                 kvResult = nextKvResult;

@@ -5,14 +5,14 @@ import { expectEqual } from "../utils";
 import { singleKeyCases, multipleKeysCases } from "./get-method-cases";
 
 describe("[KV Parity] Read key-value pairs: get() method", async () => {
-    const kvs = [env.KV_NAMESPACE, new D1Namespace(env.DB)];
+    const stores = [env.KV_NAMESPACE, new D1Namespace(env.DB)];
 
     for (const { key, type, value } of singleKeyCases) {
         test(`get("${key}", "${type}")`, async () => {
             if (value !== null) {
-                await Promise.all(kvs.map(kv => kv.put(key, value())));
+                await Promise.all(stores.map(kv => kv.put(key, value())));
             }
-            const [kvResult, d1Result] = await Promise.all(kvs.map(kv => kv.get(key, type as any)));
+            const [kvResult, d1Result] = await Promise.all(stores.map(kv => kv.get(key, type as any)));
             await expectEqual([kvResult, d1Result]);
         });
     }
@@ -20,8 +20,8 @@ describe("[KV Parity] Read key-value pairs: get() method", async () => {
     for (const { putKeys, keys, type, value } of multipleKeysCases) {
         test(`Case: get(${JSON.stringify(keys)}, "${type}")`, async () => {
             const testData = putKeys.map((k, i) => ({ key: k, value: value(i) }));
-            await Promise.all(testData.flatMap(({ key, value }) => kvs.map(kv => kv.put(key, value))));
-            const [kvResult, d1Result] = await Promise.all(kvs.map(kv => kv.get(keys, type as any)));
+            await Promise.all(testData.flatMap(({ key, value }) => stores.map(kv => kv.put(key, value))));
+            const [kvResult, d1Result] = await Promise.all(stores.map(kv => kv.get(keys, type as any)));
             await expectEqual([kvResult, d1Result]);
         });
     }
