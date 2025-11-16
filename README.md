@@ -51,6 +51,12 @@ console.log(`Fetched value from D1 KV: ${value}`); // should log "my-value"
   
   Because it runs on SQLite (via D1), you can inspect, query, and debug your data with full SQL power — including SELECT, DELETE, migration scripts, and dev tooling.
 
+  ```ts
+  const stmt = env.DB.prepare("SELECT COUNT(*) AS count FROM kv WHERE namespace = ?");
+  const result = await stmt.bind("").first<{ count: number }>();
+  console.log(`Total keys in default namespace: ${result?.count}`);
+  ```
+
 ## Installation
 
 To install d1-namespace, run the following command in your project directory:
