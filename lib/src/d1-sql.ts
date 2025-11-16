@@ -1,6 +1,29 @@
+/**
+ * Validates that a table name is safe to interpolate into SQL.
+ *
+ * Allowed characters:
+ *   - A–Z
+ *   - a–z
+ *   - 0–9
+ *   - _ (underscore)
+ *
+ * Disallowed:
+ *   - spaces
+ *   - punctuation or symbols (.-;:!?@#$% etc.)
+ *   - quotes (" ' `)
+ *   - SQL injection attempts
+ *   - Unicode characters (emoji, CJK, etc.)
+ *
+ * This ensures the table name can be safely used as a SQL identifier
+ * without quoting or escaping.
+ */
 export function sanitizeTableName(name: string): string {
     if (!/^[A-Za-z0-9_]+$/.test(name)) {
-        throw new Error(`Invalid table name: ${name}`);
+        throw new Error(
+            `Invalid table name "${name}". ` +
+            `Allowed characters: A-Z, a-z, 0-9, and _. ` +
+            `No spaces, punctuation, unicode, or special symbols are permitted.`
+        );
     }
     return name;
 }
