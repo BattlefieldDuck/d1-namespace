@@ -173,17 +173,56 @@ new D1Namespace(env.DB, { namespace: "users" });
 
 ---
 
-### `ensureSchema?: boolean`
+## `table?: { name?: string; autoCreate?: boolean }`
 
-Automatically creates the required `kv` table and indexes if they do not exist.
+Configuration for the underlying D1 table used to store key–value entries.
 
-* Runs only once on the first operation.
-* Defaults to `true`.
+By default, all data is stored in a single table named **`kv`**.
+You can override the table name to isolate multiple logical KV stores inside the same D1 database (for example: `"auth_kv"`, `"sessions_kv"`, `"cache_kv"`).
+
+All custom tables must use the same schema as the default.
+
+### `table.name?: string`
+
+Name of the D1 table to use.
+
+* Defaults to `"kv"`.
+* Useful when sharing one D1 database across multiple subsystems.
+* Can be combined with `namespace` to achieve two-level isolation.
 
 **Example**
 
 ```ts
-new D1Namespace(env.DB, { ensureSchema: true });
+new D1Namespace(env.DB, {
+  table: {
+    name: "auth_kv",
+  },
+});
+```
+
+---
+
+### `table.autoCreate?: boolean`
+
+Automatically creates the table and indexes if they do not already exist.
+
+* Runs only once, on the first operation.
+* Uses `CREATE TABLE IF NOT EXISTS` and `CREATE INDEX IF NOT EXISTS`.
+* Defaults to `true`.
+
+This is recommended for development and serverless environments, where the database may start empty.
+
+Disable it if you prefer to manage schema creation yourself (e.g., via migrations).
+
+**Example**
+
+```ts
+new D1Namespace(env.DB, {
+  table: {
+    name: "sessions_kv",
+    autoCreate: false, // handle schema externally
+  },
+});
 ```
 
 ---
