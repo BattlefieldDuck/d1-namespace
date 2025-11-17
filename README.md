@@ -15,7 +15,7 @@ Cloudflare KV-compatible key-value storage implemented on top of Cloudflare D1.
 const kv = new D1Namespace(env.DB);
 await kv.put("my-key", "my-value");
 const value = await kv.get("my-key");
-console.log(`Fetched value from D1 KV: ${value}`); // should log "my-value"
+console.log(`Fetched value from D1 KV: ${value}`); 
 ```
 
 ## Features
