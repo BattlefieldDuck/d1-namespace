@@ -3,10 +3,11 @@ import { describe, expect, test } from "vitest";
 import { D1Namespace } from "../../lib/src/index";
 
 describe("[KV Parity] Delete key-value pairs: delete() method", async () => {
-    const stores = [env.KV_NAMESPACE, new D1Namespace(env.DB)];
     const key = "KEY", value = "123456789";
 
     test(`delete("${key}")`, async () => {
+        const stores = [env.KV_NAMESPACE, new D1Namespace(env.DB)];
+
         // Put the same key/value into all KV namespaces (e.g. KV and D1)
         await Promise.all(stores.map(kv => kv.put(key, value)));
 

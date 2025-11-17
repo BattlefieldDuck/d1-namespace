@@ -31,19 +31,22 @@ const init = async (stores: KVNamespace[], n: number, metadata: boolean) => {
         }
     }
 
+    const secondsSinceEpoch = Math.floor(Date.now() / 1000) + 120;
+
+    for (const kv of stores) {
+        promises.push(kv.put("expiration_with_metadata", "", { metadata: { key: "METADATA_EXI" }, expiration: secondsSinceEpoch }));
+        promises.push(kv.put("expiration", "", { expiration: secondsSinceEpoch }));
+    }
+
     await Promise.all(promises);
 };
 
 describe("[KV Parity] List keys: list() method", async () => {
-    const stores = [
-        env.KV_NAMESPACE,
-        new D1Namespace(env.DB),
-    ];
-
     for (const { n, metdata, options } of cases) {
         test(`list(${options ? JSON.stringify(options) : ""})`, async () => {
-            await init(stores, n, metdata);
+            const stores = [env.KV_NAMESPACE, new D1Namespace(env.DB)];
 
+            await init(stores, n, metdata);
             let [kvResult, d1Result] = await Promise.all(stores.map((kv) => kv.list(options)));
 
             while (true) {

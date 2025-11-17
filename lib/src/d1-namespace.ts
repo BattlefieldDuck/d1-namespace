@@ -4,53 +4,46 @@ import { base64Decode, base64Encode, readStream } from "./utils";
 
 export class D1Namespace<Key extends string = string> implements KVNamespace<Key> {
     /**
-     * The final, normalized configuration used by this instance.
+     * Final, normalized, fully-resolved configuration.
      */
-    readonly options: Readonly<Required<D1NamespaceOptions>>;
+    readonly options: Readonly<{
+        namespace: string;
+        table: { name: string; autoCreate: boolean };
+    }>;
 
-    /**
-     * Internal UTF-8 encoders/decoders used for converting between
-     * string values and the underlying D1 BLOB storage format.
-     */
+    /** Text encoder/decoder for UTF-8 value handling. */
     readonly #encoder = new TextEncoder();
     readonly #decoder = new TextDecoder();
 
     /**
-     * Cached, lazily-prepared SQL statements.
-     * Each statement is prepared once per instance and reused across calls,
-     * avoiding repeated SQL parsing inside D1 and improving performance.
+     * Lazily prepared SQL statements for this table.
      */
     readonly #stmt: {
-        get: D1PreparedStatement,
-        getWithMetadata: D1PreparedStatement,
-        list: D1PreparedStatement,
-        put: D1PreparedStatement,
-        delete: D1PreparedStatement,
-        ensureTable: D1PreparedStatement,
-        pruneExpired: D1PreparedStatement,
+        get: D1PreparedStatement;
+        getWithMetadata: D1PreparedStatement;
+        list: D1PreparedStatement;
+        put: D1PreparedStatement;
+        delete: D1PreparedStatement;
+        ensureTable: D1PreparedStatement;
+        deleteExpired: D1PreparedStatement;
     };
 
-    /**
-     * Promise that resolves once the namespace table exists.
-     * Used to ensure `ensureTable()` is run once and awaited by
-     * concurrent calls without duplicating schema creation.
-     */
+    /** Ensures CREATE TABLE runs once per instance. */
     #tableReady?: Promise<void>;
 
     constructor(
         private readonly d1: D1Database,
         options?: D1NamespaceOptions
     ) {
-        const tableName = options?.table?.name ? sanitizeTableName(options.table.name) : "kv";
-        const pruneExpiredKeysOn = options?.pruneExpiredKeysOn ?? ["put", "delete"];
+        const namespace = options?.namespace ?? "";
+        const tableName = sanitizeTableName(options?.table?.name ?? `${namespace}_kv_entries`);
 
         this.options = Object.freeze({
-            namespace: options?.namespace ?? "",
+            namespace,
             table: {
                 name: tableName,
                 autoCreate: options?.table?.autoCreate ?? true,
-            },
-            pruneExpiredKeysOn,
+            }
         });
 
         this.#stmt = {
@@ -60,77 +53,68 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
             put: this.d1.prepare(D1_SQL.put(tableName)),
             delete: this.d1.prepare(D1_SQL.delete(tableName)),
             ensureTable: this.d1.prepare(D1_SQL.ensureTable(tableName)),
-            pruneExpired: this.d1.prepare(D1_SQL.pruneExpired(tableName)),
+            deleteExpired: this.d1.prepare(D1_SQL.deleteExpired(tableName)),
         };
     }
 
     async get<ExpectedValue = unknown>(
-        key: Key | Array<Key>,
-        options?: any
-    ): Promise<any> {
-        await this.#ensureTable();
-
-        const type = (typeof options === "string" ? options : options?.type) ?? "text";
-        const value = await this.#getImpl<ExpectedValue>(key, type, false);
-
-        if (this.options.pruneExpiredKeysOn?.includes("get")) {
-            await this.pruneExpired();
-        }
-
-        return value;
+        key: Key | Key[],
+        options?: { type?: "text" | "json" | "arrayBuffer" | "stream" } | string
+    ) {
+        const type = typeof options === "string" ? options : options?.type ?? "text";
+        return this.#getImpl<ExpectedValue>(key, type, false);
     }
 
     async getWithMetadata<ExpectedValue = unknown>(
-        key: Key | Array<Key>,
-        options?: any
-    ): Promise<any> {
-        await this.#ensureTable();
-
-        const type = (typeof options === "string" ? options : options?.type) ?? "text";
-        const value = await this.#getImpl<ExpectedValue>(key, type, true);
-
-        if (this.options.pruneExpiredKeysOn?.includes("getWithMetadata")) {
-            await this.pruneExpired();
-        }
-
-        return value;
+        key: Key | Key[],
+        options?: { type?: "text" | "json" | "arrayBuffer" | "stream" } | string
+    ) {
+        const type = typeof options === "string" ? options : options?.type ?? "text";
+        return this.#getImpl<ExpectedValue>(key, type, true);
     }
 
     async list<Metadata = unknown>(
         options?: KVNamespaceListOptions
     ): Promise<KVNamespaceListResult<Metadata, Key>> {
+        await this.#ensureTable();
+
         // https://github.com/cloudflare/workers-sdk/blob/main/packages/miniflare/src/workers/shared/keyvalue.worker.ts#L233
         const prefix = options?.prefix ?? "";
-        const lower = prefix;                      // inclusive
-        const upper = prefix + "\u{10FFFF}";       // exclusive
+        const lower = prefix;
+        const upper = prefix + "\u{10FFFF}";
         const limit = Math.max(1, Number(options?.limit ?? 1000));
-
-        // decode cursor
-        const start_after = options?.cursor ? base64Decode(options.cursor) : "";
+        const startAfter = options?.cursor ? base64Decode(options.cursor) : "";
 
         const rows = await this.#stmt.list
-            .bind(this.options.namespace, lower, upper, start_after, limit + 1)
-            .all<{ key: string; expires_at: number | null; metadata: ArrayBuffer }>();
+            .bind(lower, upper, startAfter, limit + 1)
+            .all<{ key: string; expiration: number | null; metadata: ArrayBuffer | null }>();
 
         const hasMore = rows.results.length > limit;
-        const page = hasMore ? rows.results.slice(0, limit) : rows.results;
+        const page = hasMore
+            ? rows.results.slice(0, limit)
+            : rows.results;
 
-        // Build KV-style items: { name, expiration?, metadata? }
         const keys = page.map(r => {
-            const item: { name: Key; expiration?: number; metadata?: Metadata } = { name: r.key as Key };
-            if (typeof r.expires_at === "number") item.expiration = r.expires_at;
+            const item: {
+                name: Key;
+                expiration?: number;
+                metadata?: Metadata;
+            } = { name: r.key as Key };
+
+            if (typeof r.expiration === "number") item.expiration = r.expiration;
             if (r.metadata) item.metadata = JSON.parse(this.#decoder.decode(new Uint8Array(r.metadata)));
+
             return item;
         });
 
-        if (this.options.pruneExpiredKeysOn?.includes("list")) {
-            await this.pruneExpired();
-        }
-
         if (hasMore) {
-            const lastKey = page[page.length - 1]!.key;
-            const nextCursor = base64Encode(lastKey);
-            return { keys, list_complete: false, cursor: nextCursor, cacheStatus: null };
+            const last = page[page.length - 1]!.key;
+            return {
+                keys,
+                list_complete: false,
+                cursor: base64Encode(last),
+                cacheStatus: null,
+            };
         }
 
         return { keys, list_complete: true, cacheStatus: null };
@@ -142,98 +126,69 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
         options?: KVNamespacePutOptions
     ): Promise<void> {
         await this.#ensureTable();
+        const now = Math.floor(Date.now() / 1000);
 
-        // 1) Normalize value to Uint8Array
+        // Value → Uint8Array
         let bytes: Uint8Array;
         if (typeof value === "string") {
             bytes = this.#encoder.encode(value);
         } else if (value instanceof ArrayBuffer) {
             bytes = new Uint8Array(value);
         } else if (ArrayBuffer.isView(value)) {
-            bytes = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+            bytes = new Uint8Array(
+                value.buffer,
+                value.byteOffset,
+                value.byteLength
+            );
         } else if (value instanceof ReadableStream) {
             bytes = await readStream(value);
         } else {
             throw new TypeError("KV put() accepts only strings, ArrayBuffers, ArrayBufferViews, and ReadableStreams as values.");
         }
 
-        // 2) Compute expiration TTL seconds
-        // https://github.com/cloudflare/workers-sdk/blob/main/packages/miniflare/src/workers/kv/validator.worker.ts#L73
+        // Expiration → ABSOLUTE timestamp
         let expiration: number | null = null;
-
         if (options?.expirationTtl != null) {
-            expiration = options.expirationTtl;
-
-            if (expiration <= 0) {
-                throw new RangeError(`Invalid expiration_ttl of ${options.expirationTtl}. Please specify integer greater than 0.`);
-            }
+            if (options.expirationTtl <= 0)
+                throw new RangeError(
+                    `Invalid expiration_ttl of ${options.expirationTtl}. Please specify integer greater than 0.`
+                );
+            expiration = now + options.expirationTtl;
         } else if (options?.expiration != null) {
-            expiration = options.expiration - Math.floor(Date.now() / 1000);
-
-            if (expiration <= 0) {
-                throw new RangeError(`Invalid expiration of ${options.expiration}. Please specify integer greater than the current number of seconds since the UNIX epoch.`);
-            }
+            if (options.expiration <= now)
+                throw new RangeError(
+                    `Invalid expiration of ${options.expiration}. Please specify integer greater than the current number of seconds since the UNIX epoch.`
+                );
+            expiration = options.expiration;
         }
 
-        // 3) Serialize metadata as JSON (nullable)
-        let metadata: Uint8Array<ArrayBufferLike> | null;
-        if (options?.metadata === undefined) {
-            metadata = null;
-        } else {
-            const metadataString = JSON.stringify(options.metadata);
-
-            if (metadataString === undefined) {
-                throw new TypeError("Metadata could not be serialized to JSON.");
-            }
-
-            metadata = this.#encoder.encode(metadataString);
+        // Metadata → encoded JSON
+        let metadata: Uint8Array | null = null;
+        if (options?.metadata !== undefined) {
+            const str = JSON.stringify(options.metadata);
+            if (str === undefined)
+                throw new TypeError(
+                    "Metadata could not be serialized to JSON."
+                );
+            metadata = this.#encoder.encode(str);
         }
 
-        // 4) UPSERT
-        const statements = [this.#stmt.put.bind(this.options.namespace, key, bytes, expiration, metadata)];
-
-        if (this.options.pruneExpiredKeysOn?.includes("put")) {
-            statements.push(this.#stmt.pruneExpired.bind(this.options.namespace));
-        }
-
-        await this.d1.batch(statements);
+        // UPSERT + delete expired entries
+        await this.d1.batch([
+            this.#stmt.put.bind(key, bytes, expiration, metadata),
+            this.#stmt.deleteExpired.bind()
+        ]);
     }
 
     async delete(key: Key): Promise<void> {
         await this.#ensureTable();
-
-        const statements = [this.#stmt.delete.bind(this.options.namespace, key)];
-
-        if (this.options.pruneExpiredKeysOn?.includes("delete")) {
-            statements.push(this.#stmt.pruneExpired.bind(this.options.namespace));
-        }
-
-        await this.d1.batch(statements);
+        await this.d1.batch([this.#stmt.delete.bind(key), this.#stmt.deleteExpired.bind()]);
     }
 
-    /**
-     * Removes all expired key–value pairs within this namespace.
-     *
-     * Cloudflare KV automatically evicts expired keys in the background,
-     * but D1 does not. This method provides an explicit cleanup step to
-     * maintain parity with KV’s behavior when TTLs are used.
-     *
-     * Behavior:
-     * - Only keys whose `expires_at` timestamp is in the past are removed.
-     * - Only keys inside *this namespace* are affected.
-     * - Returns the number of rows deleted.
-     *
-     * This method is safe to call repeatedly; if there are no expired
-     * entries, it simply returns `0`.
-     *
-     * @returns The number of expired rows deleted.
-     */
-    async pruneExpired(): Promise<number> {
+    async deleteExpired(): Promise<number> {
         await this.#ensureTable();
-
-        const result = await this.#stmt.pruneExpired.bind(this.options.namespace).run();
-
-        return result.meta.changes;
+        const res = await this.#stmt.deleteExpired.run();
+        return res.meta.changes;
     }
 
     /**
@@ -245,39 +200,40 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
         type: string,
         withMetadata: boolean
     ) {
-        // Select SQL depending on whether metadata is needed.
-        const select = withMetadata ? this.#stmt.getWithMetadata : this.#stmt.get;
+        await this.#ensureTable();
 
-        // Multiple keys
+        const stmt = withMetadata
+            ? this.#stmt.getWithMetadata
+            : this.#stmt.get;
+
+        // Multi-key batch mode
         if (Array.isArray(key)) {
-            // Only "text" or "json" are supported for multi-key reads (KV API parity).
             if (type !== "json" && type !== "text") {
                 throw new Error(`"${type}" is not a valid type. Use "json" or "text"`);
             }
 
-            // Prepare one SELECT per key, then execute them in a single D1 batch.
-            const stmts = key.map(k => select.bind(this.options.namespace, k));
-            const batchResult = await this.d1.batch<{ value: ArrayBuffer, metadata: ArrayBuffer | null }>(stmts);
+            const stmts = key.map(k => stmt.bind(k));
+            const results = await this.d1.batch<{ value: ArrayBuffer, metadata: ArrayBuffer | null }>(stmts);
 
-            // Use a Map to preserve key ordering (like Cloudflare KV does).
-            const out = new Map<string, ExpectedValue | KVNamespaceGetWithMetadataResult<ExpectedValue, unknown> | null>();
+            const out = new Map<
+                string,
+                | ExpectedValue
+                | KVNamespaceGetWithMetadataResult<ExpectedValue, unknown>
+                | null
+            >();
 
-            // Process each result.
             for (let i = 0; i < key.length; i++) {
-                const k = key[i] as string;
-                const row = batchResult[i]?.results[0] as { value: ArrayBuffer, metadata: ArrayBuffer | null } | null;
+                const k = key[i]!;
+                const row = results[i]?.results?.[0] ?? null;
 
-                // Key not found → null
                 if (!row) {
                     out.set(k, null);
                     continue;
                 }
 
-                // Decode the stored value
-                const str = this.#decoder.decode(new Uint8Array(row.value));
-                const value = type === "json" ? JSON.parse(str) : str;
+                const text = this.#decoder.decode(new Uint8Array(row.value));
+                const value = type === "json" ? JSON.parse(text) : text;
 
-                // Attach metadata if requested
                 out.set(k, withMetadata ? {
                     value,
                     metadata: row.metadata ? JSON.parse(this.#decoder.decode(new Uint8Array(row.metadata))) : null,
@@ -288,53 +244,58 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
         }
 
         // Single key
-        if (type !== "text" && type !== "json" && type !== "arrayBuffer" && type !== "stream") {
+        if (
+            type !== "text" &&
+            type !== "json" &&
+            type !== "arrayBuffer" &&
+            type !== "stream"
+        ) {
             throw new TypeError('Unknown response type. Possible types are "text", "json", "arrayBuffer", and "stream".');
         }
 
-        // Run a single SELECT
-        const row = await select.bind(this.options.namespace, key).first<{ value: ArrayBuffer, metadata: ArrayBuffer | null }>();
+        const row = await stmt
+            .bind(key)
+            .first<{ value: ArrayBuffer; metadata: ArrayBuffer | null }>();
 
-        // Return null result (or null + metadata) if not found
         if (!row) {
             return withMetadata ? {
                 value: null,
                 metadata: null,
-                cacheStatus: null
+                cacheStatus: null,
             } as KVNamespaceGetWithMetadataResult<ExpectedValue, unknown> : null;
         }
 
-        // Decode the value based on requested type
-        const value = (() => {
-            const u8 = new Uint8Array(row.value);
+        const u8 = new Uint8Array(row.value);
 
-            // ArrayBuffer: fastest path, no copy beyond slicing.
-            if (type === "arrayBuffer") {
-                return u8.buffer;
-            }
-
-            // Stream: synthetic ReadableStream wrapper for API compatibility.
-            if (type === "stream") {
-                return new ReadableStream({
-                    start(c) { c.enqueue(u8); c.close(); }
+        let value: any;
+        switch (type) {
+            case "arrayBuffer":
+                value = u8.buffer;
+                break;
+            case "stream":
+                value = new ReadableStream({
+                    start(c) {
+                        c.enqueue(u8);
+                        c.close();
+                    },
                 });
-            }
+                break;
+            case "json":
+                value = JSON.parse(this.#decoder.decode(u8));
+                break;
+            default:
+                value = this.#decoder.decode(u8);
+        }
 
-            // Text or JSON: decode to UTF-8 string, then parse if needed.
-            const val = this.#decoder.decode(u8);
-            return type === "json" ? JSON.parse(val) : val;
-        })();
-
-        // Wrap in metadata if requested
         return withMetadata ? {
             value,
             metadata: row.metadata ? JSON.parse(this.#decoder.decode(new Uint8Array(row.metadata))) : null,
-            cacheStatus: null
+            cacheStatus: null,
         } as KVNamespaceGetWithMetadataResult<ExpectedValue, unknown> : value;
     }
 
     async #ensureTable() {
-        if (!this.options.table?.autoCreate) return;
+        if (!this.options.table.autoCreate) return;
 
         // If schema initialization already started, reuse the same Promise.
         if (!this.#tableReady) {
@@ -461,5 +422,5 @@ export interface D1Namespace<Key extends string = string> extends KVNamespace<Ke
         Map<string, KVNamespaceGetWithMetadataResult<ExpectedValue, Metadata>>
     >;
     delete(key: Key): Promise<void>;
-    pruneExpired(): Promise<number>;
+    deleteExpired(): Promise<number>;
 }

@@ -32,24 +32,21 @@ export const D1_SQL = {
     get: (table: string) => /* sql */ `
         SELECT value
         FROM ${table}
-        WHERE namespace = ?
-          AND key = ?
-          AND (expires_at IS NULL OR expires_at > unixepoch())
+        WHERE key = ?
+          AND (expiration IS NULL OR expiration > unixepoch())
     `,
 
     getWithMetadata: (table: string) => /* sql */ `
         SELECT value, metadata
         FROM ${table}
-        WHERE namespace = ?
-          AND key = ?
-          AND (expires_at IS NULL OR expires_at > unixepoch())
+        WHERE key = ?
+          AND (expiration IS NULL OR expiration > unixepoch())
     `,
 
     list: (table: string) => /* sql */ `
-        SELECT key, expires_at, metadata
+        SELECT key, expiration, metadata
         FROM ${table}
-        WHERE namespace = ?
-          AND (expires_at IS NULL OR expires_at > unixepoch())
+        WHERE (expiration IS NULL OR expiration > unixepoch())
           AND key >= ?
           AND key < ?
           AND key > ?
@@ -58,46 +55,35 @@ export const D1_SQL = {
     `,
 
     put: (table: string) => /* sql */ `
-        INSERT INTO ${table} (namespace, key, value, ttl_seconds, created_at, metadata)
-        VALUES (?, ?, ?, ?, unixepoch(), ?)
-        ON CONFLICT(namespace, key) DO UPDATE SET
-            value       = excluded.value,
-            ttl_seconds = excluded.ttl_seconds,
-            created_at  = unixepoch(),
-            metadata    = excluded.metadata
+        INSERT INTO ${table} (key, value, expiration, metadata)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(key) DO UPDATE SET
+            value      = excluded.value,
+            expiration = excluded.expiration,
+            metadata   = excluded.metadata
     `,
 
     delete: (table: string) => /* sql */ `
         DELETE FROM ${table}
-        WHERE namespace = ?
-          AND key = ?
+        WHERE key = ?
     `,
 
     ensureTable: (table: string) => /* sql */ `
         CREATE TABLE IF NOT EXISTS ${table} (
-            namespace   TEXT    NOT NULL,
-            key         TEXT    NOT NULL COLLATE BINARY,
-            value       BLOB    NOT NULL,
-            ttl_seconds INTEGER,
-            created_at  INTEGER NOT NULL DEFAULT (unixepoch()),
-            expires_at  INTEGER GENERATED ALWAYS AS (
-                CASE WHEN ttl_seconds IS NULL THEN NULL
-                     ELSE created_at + ttl_seconds
-                END
-            ) STORED,
-            metadata    BLOB,
-            PRIMARY KEY (namespace, key)
+            key        TEXT    NOT NULL COLLATE BINARY PRIMARY KEY,
+            value      BLOB    NOT NULL,
+            expiration INTEGER,
+            metadata   BLOB
         ) WITHOUT ROWID;
 
-        CREATE INDEX IF NOT EXISTS ${table}_ns_exp_idx
-            ON ${table}(namespace, expires_at)
-            WHERE expires_at IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS ${table}_exp_idx
+            ON ${table}(expiration)
+            WHERE expiration IS NOT NULL;
     `,
 
-    pruneExpired: (table: string) => /* sql */ `
+    deleteExpired: (table: string) => /* sql */ `
         DELETE FROM ${table}
-        WHERE namespace = ?
-          AND expires_at IS NOT NULL
-          AND expires_at <= unixepoch()
+        WHERE expiration IS NOT NULL
+          AND expiration <= unixepoch()
     `,
 } as const;

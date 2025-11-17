@@ -2,10 +2,10 @@
 
 ![Cloudflare D1](https://img.shields.io/badge/Cloudflare_D1-F89D33?style=flat-square&logo=cloudflare&logoColor=white)
 ![NPM Type Definitions](https://img.shields.io/npm/types/d1-namespace)
-[![coverage](https://img.shields.io/endpoint?url=https://battlefieldduck.github.io/d1-namespace/badge.json)](https://battlefieldduck.github.io/d1-namespace/coverage/)
 [![NPM Version](https://img.shields.io/npm/v/d1-namespace)](https://www.npmjs.com/package/d1-namespace)
 ![NPM Downloads](https://img.shields.io/npm/dw/d1-namespace)
 ![NPM Downloads](https://img.shields.io/npm/d18m/d1-namespace)
+[![coverage](https://img.shields.io/endpoint?url=https://battlefieldduck.github.io/d1-namespace/badge.json)](https://battlefieldduck.github.io/d1-namespace/coverage/)
 ![NPM License](https://img.shields.io/npm/l/d1-namespace)
 
 Cloudflare KV-compatible key-value storage implemented on top of Cloudflare D1.
@@ -52,7 +52,7 @@ console.log(`Fetched value from D1 KV: ${value}`); // should log "my-value"
   Because it runs on SQLite (via D1), you can inspect, query, and debug your data with full SQL power — including SELECT, DELETE, migration scripts, and dev tooling.
 
   ```ts
-  const stmt = env.DB.prepare("SELECT COUNT(*) AS count FROM kv WHERE namespace = ?");
+  const stmt = env.DB.prepare("SELECT COUNT(*) AS count FROM _kv_entries");
   const result = await stmt.bind("").first<{ count: number }>();
   console.log(`Total keys in default namespace: ${result?.count}`);
   ```
@@ -168,7 +168,7 @@ Logical namespace that groups key–value pairs.
 **Example**
 
 ```ts
-new D1Namespace(env.DB, { namespace: "users" });
+new D1Namespace(env.DB, { namespace: "sessions" });
 ```
 
 ---
@@ -177,25 +177,18 @@ new D1Namespace(env.DB, { namespace: "users" });
 
 Configuration for the underlying D1 table used to store key–value entries.
 
-By default, all data is stored in a single table named **`kv`**.
-You can override the table name to isolate multiple logical KV stores inside the same D1 database (for example: `"auth_kv"`, `"sessions_kv"`, `"cache_kv"`).
-
-All custom tables must use the same schema as the default.
-
 ### `table.name?: string`
 
 Name of the D1 table to use.
 
-* Defaults to `"kv"`.
-* Useful when sharing one D1 database across multiple subsystems.
-* Can be combined with `namespace` to achieve two-level isolation.
+* Defaults to `"${namespace}_kv_entries"`.
 
 **Example**
 
 ```ts
 new D1Namespace(env.DB, {
   table: {
-    name: "auth_kv",
+    name: "sessions_kv_entries",
   },
 });
 ```
@@ -219,34 +212,10 @@ Disable it if you prefer to manage schema creation yourself (e.g., via migration
 ```ts
 new D1Namespace(env.DB, {
   table: {
-    name: "sessions_kv",
+    name: "sessions_kv_entries",
     autoCreate: false, // handle schema externally
   },
 });
-```
-
----
-
-### `pruneExpiredKeysOn?: (...)[]`
-
-Controls when expired keys are automatically removed.
-
-* Defaults to `["put", "delete"]`.
-
-Supported triggers:
-
-| Operation           | Meaning                                         |
-| ------------------- | ----------------------------------------------- |
-| `"put"`             | After inserting or updating a key               |
-| `"delete"`          | After deleting a key                            |
-| `"get"`             | After reading a key *(not recommended)*         |
-| `"getWithMetadata"` | After reading with metadata *(not recommended)* |
-| `"list"`            | After listing keys *(use with caution)*         |
-
-**Example**
-
-```ts
-new D1Namespace(env.DB, { pruneExpiredKeysOn: ["put", "delete"] });
 ```
 
 ## Contributing

@@ -2,8 +2,8 @@ import { test, expect, describe } from "vitest";
 import { D1Namespace } from "../../lib/src/index";
 import { env } from "cloudflare:test";
 
-describe("[D1] Prune key-value pairs: pruneExpired() method", async () => {
-    test("pruneExpired() removes only expired keys", async () => {
+describe("[D1] Delete key-value pairs: deleteExpired() method", async () => {
+    test("deleteExpired() removes only expired keys", async () => {
         // Create a KV namespace (defaults to namespace = "")
         // Using a blank namespace avoids cross-test interference.
         const kv = new D1Namespace(env.DB);
@@ -24,9 +24,9 @@ describe("[D1] Prune key-value pairs: pruneExpired() method", async () => {
         // but NOT long enough for "alive" (still within 5 seconds).
         await new Promise(resolve => setTimeout(resolve, 2500));
 
-        // pruneExpired() should remove exactly one key:
+        // deleteExpired() should remove exactly one key:
         // the one with ttl_seconds = 2.
-        const count = await kv.pruneExpired();
+        const count = await kv.deleteExpired();
         expect(count).toBe(1);
 
         // Validate post-conditions:
