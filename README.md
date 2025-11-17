@@ -53,7 +53,7 @@ console.log(`Fetched value from D1 KV: ${value}`); // should log "my-value"
 
   ```ts
   const stmt = env.DB.prepare("SELECT COUNT(*) AS count FROM _kv_entries");
-  const result = await stmt.bind("").first<{ count: number }>();
+  const result = await stmt.first<{ count: number }>();
   console.log(`Total keys in default namespace: ${result?.count}`);
   ```
 
@@ -168,7 +168,7 @@ Logical namespace that groups key–value pairs.
 **Example**
 
 ```ts
-new D1Namespace(env.DB, { namespace: "sessions" });
+const sessions = new D1Namespace(env.DB, { namespace: "sessions" });
 ```
 
 ---
