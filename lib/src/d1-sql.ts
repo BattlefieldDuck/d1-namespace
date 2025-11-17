@@ -77,8 +77,7 @@ export const D1_SQL = {
         ) WITHOUT ROWID;
 
         CREATE INDEX IF NOT EXISTS ${table}_exp_idx
-            ON ${table}(expiration)
-            WHERE expiration IS NOT NULL;
+            ON ${table}(expiration);
     `,
 
     deleteExpired: (table: string) => /* sql */ `

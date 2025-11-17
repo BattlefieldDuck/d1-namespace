@@ -10,6 +10,5 @@ CREATE TABLE IF NOT EXISTS _kv_entries (
 ) WITHOUT ROWID;
 
 CREATE INDEX IF NOT EXISTS _kv_entries_exp_idx
-  ON _kv_entries(expiration)
-  WHERE expiration IS NOT NULL;
+  ON _kv_entries(expiration);
 -- Migration ends here
