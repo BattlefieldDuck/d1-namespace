@@ -24,8 +24,8 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
         list: D1PreparedStatement;
         put: D1PreparedStatement;
         delete: D1PreparedStatement;
-        ensureTable: D1PreparedStatement;
         deleteExpired: D1PreparedStatement;
+        ensureTable: D1PreparedStatement;
     };
 
     /** Ensures CREATE TABLE runs once per instance. */
@@ -52,8 +52,8 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
             list: this.d1.prepare(D1_SQL.list(tableName)),
             put: this.d1.prepare(D1_SQL.put(tableName)),
             delete: this.d1.prepare(D1_SQL.delete(tableName)),
-            ensureTable: this.d1.prepare(D1_SQL.ensureTable(tableName)),
             deleteExpired: this.d1.prepare(D1_SQL.deleteExpired(tableName)),
+            ensureTable: this.d1.prepare(D1_SQL.ensureTable(tableName)),
         };
     }
 
@@ -71,6 +71,109 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
     ) {
         const type = typeof options === "string" ? options : options?.type ?? "text";
         return this.#getImpl<ExpectedValue>(key, type, true);
+    }
+
+    /**
+     * Internal unified implementation for both `get()` and `getWithMetadata()`.
+     * Handles single-key and multi-key fetches, supporting `text`, `json`, `arrayBuffer`, and `stream` types.
+     */
+    async #getImpl<ExpectedValue = unknown>(
+        key: Key | Array<Key>,
+        type: string,
+        withMetadata: boolean
+    ) {
+        await this.#ensureTable();
+
+        const stmt = withMetadata
+            ? this.#stmt.getWithMetadata
+            : this.#stmt.get;
+
+        // Multi-key batch mode
+        if (Array.isArray(key)) {
+            if (type !== "json" && type !== "text") {
+                throw new Error(`"${type}" is not a valid type. Use "json" or "text"`);
+            }
+
+            const stmts = key.map(k => stmt.bind(k));
+            const results = await this.d1.batch<{ value: ArrayBuffer, metadata: ArrayBuffer | null }>(stmts);
+
+            const out = new Map<
+                string,
+                | ExpectedValue
+                | KVNamespaceGetWithMetadataResult<ExpectedValue, unknown>
+                | null
+            >();
+
+            for (let i = 0; i < key.length; i++) {
+                const k = key[i]!;
+                const row = results[i]?.results?.[0] ?? null;
+
+                if (!row) {
+                    out.set(k, null);
+                    continue;
+                }
+
+                const text = this.#decoder.decode(new Uint8Array(row.value));
+                const value = type === "json" ? JSON.parse(text) : text;
+
+                out.set(k, withMetadata ? {
+                    value,
+                    metadata: row.metadata ? JSON.parse(this.#decoder.decode(new Uint8Array(row.metadata))) : null,
+                } as KVNamespaceGetWithMetadataResult<ExpectedValue, unknown> : value);
+            }
+
+            return out;
+        }
+
+        // Single key
+        if (
+            type !== "text" &&
+            type !== "json" &&
+            type !== "arrayBuffer" &&
+            type !== "stream"
+        ) {
+            throw new TypeError('Unknown response type. Possible types are "text", "json", "arrayBuffer", and "stream".');
+        }
+
+        const row = await stmt
+            .bind(key)
+            .first<{ value: ArrayBuffer; metadata: ArrayBuffer | null }>();
+
+        if (!row) {
+            return withMetadata ? {
+                value: null,
+                metadata: null,
+                cacheStatus: null,
+            } as KVNamespaceGetWithMetadataResult<ExpectedValue, unknown> : null;
+        }
+
+        const u8 = new Uint8Array(row.value);
+
+        let value: any;
+        switch (type) {
+            case "arrayBuffer":
+                value = u8.buffer;
+                break;
+            case "stream":
+                value = new ReadableStream({
+                    start(c) {
+                        c.enqueue(u8);
+                        c.close();
+                    },
+                });
+                break;
+            case "json":
+                value = JSON.parse(this.#decoder.decode(u8));
+                break;
+            default:
+                value = this.#decoder.decode(u8);
+        }
+
+        return withMetadata ? {
+            value,
+            metadata: row.metadata ? JSON.parse(this.#decoder.decode(new Uint8Array(row.metadata))) : null,
+            cacheStatus: null,
+        } as KVNamespaceGetWithMetadataResult<ExpectedValue, unknown> : value;
     }
 
     async list<Metadata = unknown>(
@@ -189,109 +292,6 @@ export class D1Namespace<Key extends string = string> implements KVNamespace<Key
         await this.#ensureTable();
         const res = await this.#stmt.deleteExpired.run();
         return res.meta.changes;
-    }
-
-    /**
-     * Internal unified implementation for both `get()` and `getWithMetadata()`.
-     * Handles single-key and multi-key fetches, supporting `text`, `json`, `arrayBuffer`, and `stream` types.
-     */
-    async #getImpl<ExpectedValue = unknown>(
-        key: Key | Array<Key>,
-        type: string,
-        withMetadata: boolean
-    ) {
-        await this.#ensureTable();
-
-        const stmt = withMetadata
-            ? this.#stmt.getWithMetadata
-            : this.#stmt.get;
-
-        // Multi-key batch mode
-        if (Array.isArray(key)) {
-            if (type !== "json" && type !== "text") {
-                throw new Error(`"${type}" is not a valid type. Use "json" or "text"`);
-            }
-
-            const stmts = key.map(k => stmt.bind(k));
-            const results = await this.d1.batch<{ value: ArrayBuffer, metadata: ArrayBuffer | null }>(stmts);
-
-            const out = new Map<
-                string,
-                | ExpectedValue
-                | KVNamespaceGetWithMetadataResult<ExpectedValue, unknown>
-                | null
-            >();
-
-            for (let i = 0; i < key.length; i++) {
-                const k = key[i]!;
-                const row = results[i]?.results?.[0] ?? null;
-
-                if (!row) {
-                    out.set(k, null);
-                    continue;
-                }
-
-                const text = this.#decoder.decode(new Uint8Array(row.value));
-                const value = type === "json" ? JSON.parse(text) : text;
-
-                out.set(k, withMetadata ? {
-                    value,
-                    metadata: row.metadata ? JSON.parse(this.#decoder.decode(new Uint8Array(row.metadata))) : null,
-                } as KVNamespaceGetWithMetadataResult<ExpectedValue, unknown> : value);
-            }
-
-            return out;
-        }
-
-        // Single key
-        if (
-            type !== "text" &&
-            type !== "json" &&
-            type !== "arrayBuffer" &&
-            type !== "stream"
-        ) {
-            throw new TypeError('Unknown response type. Possible types are "text", "json", "arrayBuffer", and "stream".');
-        }
-
-        const row = await stmt
-            .bind(key)
-            .first<{ value: ArrayBuffer; metadata: ArrayBuffer | null }>();
-
-        if (!row) {
-            return withMetadata ? {
-                value: null,
-                metadata: null,
-                cacheStatus: null,
-            } as KVNamespaceGetWithMetadataResult<ExpectedValue, unknown> : null;
-        }
-
-        const u8 = new Uint8Array(row.value);
-
-        let value: any;
-        switch (type) {
-            case "arrayBuffer":
-                value = u8.buffer;
-                break;
-            case "stream":
-                value = new ReadableStream({
-                    start(c) {
-                        c.enqueue(u8);
-                        c.close();
-                    },
-                });
-                break;
-            case "json":
-                value = JSON.parse(this.#decoder.decode(u8));
-                break;
-            default:
-                value = this.#decoder.decode(u8);
-        }
-
-        return withMetadata ? {
-            value,
-            metadata: row.metadata ? JSON.parse(this.#decoder.decode(new Uint8Array(row.metadata))) : null,
-            cacheStatus: null,
-        } as KVNamespaceGetWithMetadataResult<ExpectedValue, unknown> : value;
     }
 
     async #ensureTable() {

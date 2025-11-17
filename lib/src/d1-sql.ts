@@ -68,6 +68,12 @@ export const D1_SQL = {
         WHERE key = ?
     `,
 
+    deleteExpired: (table: string) => /* sql */ `
+        DELETE FROM ${table}
+        WHERE expiration IS NOT NULL
+          AND expiration <= unixepoch()
+    `,
+
     ensureTable: (table: string) => /* sql */ `
         CREATE TABLE IF NOT EXISTS ${table} (
             key        TEXT    NOT NULL COLLATE BINARY PRIMARY KEY,
@@ -77,12 +83,7 @@ export const D1_SQL = {
         ) WITHOUT ROWID;
 
         CREATE INDEX IF NOT EXISTS ${table}_exp_idx
-            ON ${table}(expiration);
-    `,
-
-    deleteExpired: (table: string) => /* sql */ `
-        DELETE FROM ${table}
-        WHERE expiration IS NOT NULL
-          AND expiration <= unixepoch()
+            ON ${table}(expiration)
+            WHERE expiration IS NOT NULL;
     `,
 } as const;
