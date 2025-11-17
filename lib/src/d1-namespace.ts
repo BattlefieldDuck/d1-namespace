@@ -1,6 +1,6 @@
-import { D1NamespaceOptions } from "./d1-options";
-import { D1_SQL, sanitizeTableName } from "./d1-sql";
-import { base64Decode, base64Encode, readStream } from "./utils";
+import { D1NamespaceOptions } from "./d1-options.js";
+import { D1_SQL, sanitizeTableName } from "./d1-sql.js";
+import { base64Decode, base64Encode, readStream } from "./utils.js";
 
 export class D1Namespace<Key extends string = string> implements KVNamespace<Key> {
     /**
