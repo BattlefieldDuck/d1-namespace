@@ -57,6 +57,24 @@ console.log(`Fetched value from D1 KV: ${value}`); // should log "my-value"
   console.log(`Total keys in default namespace: ${result?.count}`);
   ```
 
+
+* **Expiring keys**
+
+	Cloudflare KV does not allow expiration times shorter than 60 seconds. With D1 Namespace, you can set TTLs with just a few seconds.
+	This provides much finer control for short-lived data, caching, sessions, and temporary state.
+
+	```ts
+	// Cloudflare KV
+	const kv = env.KV_NAMESPACE;
+	await kv.put("key", "value for the key", { expirationTtl: 30 });
+	// ❌ Fails — KV does not allow TTL values below 60 seconds.
+	
+	// D1 Namespace
+	const kv = new D1Namespace(env.DB);
+	await kv.put("key", "value for the key", { expirationTtl: 30 });
+	// ✅ Works — D1 Namespace supports sub-60-second expirations.
+	```
+
 ## Installation
 
 To install d1-namespace, run the following command in your project directory:
@@ -133,24 +151,6 @@ export default {
         });
     },
 } satisfies ExportedHandler<Env>;
-```
-
-### Expiring keys
-
-Cloudflare KV does not allow expiration times shorter than 60 seconds.
-With D1 Namespace, you can set TTLs with just a few seconds.
-This provides much finer control for short-lived data, caching, sessions, and temporary state.
-
-```ts
-// Cloudflare KV
-const kv = env.KV_NAMESPACE;
-await kv.put("key", "value for the key", { expirationTtl: 30 });
-// ❌ Fails — KV does not allow TTL values below 60 seconds.
-
-// D1 Namespace
-const kv = new D1Namespace(env.DB);
-await kv.put("key", "value for the key", { expirationTtl: 30 });
-// ✅ Works — D1 Namespace supports sub-60-second expirations.
 ```
 
 ## D1 Namespace Options
