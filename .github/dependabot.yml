@@ -31,3 +31,11 @@ updates:
       npm-majors:
         update-types: ["major"]
     versioning-strategy: increase
+    # Ignore vitest and @vitest/coverage-istanbul 4.x.x update,
+    # because of peerDependencies on @cloudflare/vitest-pool-workers
+    # Source: https://github.com/cloudflare/workers-sdk/blob/main/packages/vitest-pool-workers/package.json#L85
+    ignore:
+      - dependency-name: "vitest"
+        versions: ["4.x"]
+      - dependency-name: "@vitest/coverage-istanbul"
+        versions: ["4.x"]
